@@ -26,6 +26,7 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 
+// ✅ Fixed this line:
 Route::get('/weather', function () {
-    return Inertia\Inertia::render('Weather');
+    return Inertia::render('Weather');
 });
