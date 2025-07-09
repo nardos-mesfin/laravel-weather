@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 export default function Weather() {
     const [city, setCity] = useState('Addis Ababa');
     const [weather, setWeather] = useState(null);
+    const [forecast, setForecast] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [unit, setUnit] = useState('metric');
@@ -35,12 +36,14 @@ export default function Weather() {
                 try {
                     const res = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}&unit=${unit}`);
                     const data = await res.json();
-                    if (data.cod !== 200) {
-                        setError(data.message);
+
+                    if (data.error) {
+                        setError(data.error);
                     } else {
-                        setWeather(data);
-                        setCity(data.name);
-                        updateRecent(data.name);
+                        setWeather(data.weather);
+                        setForecast(data.forecast || []);
+                        setCity(data.weather.name);
+                        updateRecent(data.weather.name);
                     }
                 } catch {
                     setError("Failed to get weather.");
@@ -57,23 +60,28 @@ export default function Weather() {
         );
     };
 
-    // 📍 Fetch by city name
+    // 🔍 Get weather by city name
     const getWeather = async () => {
         setLoading(true);
         setError(null);
         setWeather(null);
+        setForecast([]);
+
         try {
             const res = await fetch(`/api/weather?city=${city}&unit=${unit}`);
             const data = await res.json();
-            if (data.cod !== 200) {
-                setError(data.message);
+
+            if (data.error) {
+                setError(data.error);
             } else {
-                setWeather(data);
-                updateRecent(data.name);
+                setWeather(data.weather);
+                setForecast(data.forecast || []);
+                updateRecent(data.weather.name);
             }
         } catch {
             setError("Failed to fetch weather.");
         }
+
         setLoading(false);
     };
 
@@ -155,24 +163,28 @@ export default function Weather() {
                 </button>
             </div>
 
-            <div className="text-sm font-medium mb-2">Recent Searches:</div>
-            <div className="flex flex-wrap gap-2 justify-center mb-4">
-                {recent.map((item, i) => (
-                    <button
-                        key={i}
-                        onClick={() => { setCity(item); getWeather(); }}
-                        className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
-                    >
-                        {item}
-                    </button>
-                ))}
-            </div>
+            {recent.length > 0 && (
+                <>
+                    <div className="text-sm font-medium mb-2">Recent Searches:</div>
+                    <div className="flex flex-wrap gap-2 justify-center mb-4">
+                        {recent.map((item, i) => (
+                            <button
+                                key={i}
+                                onClick={() => { setCity(item); getWeather(); }}
+                                className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
+                            >
+                                {item}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
 
             {loading && <p className="text-gray-500">Loading...</p>}
             {error && <p className="text-red-500">{error}</p>}
 
             {weather && (
-                <div className="mt-6 bg-white dark:bg-gray-800 shadow p-4 rounded text-left animate-fade-in max-w-full sm:max-w-md mx-auto">
+                <div className="mt-6 bg-white dark:bg-gray-800 shadow p-4 rounded text-left max-w-full sm:max-w-md mx-auto">
                     <div className="text-center mb-4">
                         {iconUrl && <img src={iconUrl} alt="Icon" className="w-20 h-20 mx-auto" />}
                         <p className="text-lg font-bold">{weather.name}</p>
@@ -187,6 +199,25 @@ export default function Weather() {
                         src={`https://www.openstreetmap.org/export/embed.html?bbox=${weather.coord.lon - 0.02}%2C${weather.coord.lat - 0.02}%2C${weather.coord.lon + 0.02}%2C${weather.coord.lat + 0.02}&layer=mapnik&marker=${weather.coord.lat}%2C${weather.coord.lon}`}
                         title="Map"
                     ></iframe>
+                </div>
+            )}
+
+            {forecast.length > 0 && (
+                <div className="mt-6 bg-gray-100 dark:bg-gray-800 p-4 rounded max-w-full sm:max-w-xl mx-auto">
+                    <h2 className="text-lg font-bold mb-2 text-center">📅 Forecast (Next 24h)</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {forecast.map((f, i) => (
+                            <div key={i} className="p-2 bg-white dark:bg-gray-700 rounded shadow text-center">
+                                <p className="text-sm">{f.dt_txt.slice(11, 16)}</p>
+                                <img
+                                    src={`https://openweathermap.org/img/wn/${f.weather[0].icon}@2x.png`}
+                                    alt="icon"
+                                    className="w-12 h-12 mx-auto"
+                                />
+                                <p>{f.main.temp}°{unit === 'metric' ? 'C' : 'F'}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>
