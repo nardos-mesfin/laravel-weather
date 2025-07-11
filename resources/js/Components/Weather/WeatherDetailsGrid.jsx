@@ -1,27 +1,25 @@
 // resources/js/Components/Weather/WeatherDetailsGrid.jsx
 
 import React from 'react';
-import dayjs from 'dayjs';
 import { WiHumidity, WiStrongWind, WiSunrise, WiSunset } from 'react-icons/wi';
+import SunPath from './SunPath'; // Import our new component
 
 const WeatherDetailsGrid = ({ current, unit }) => {
     if (!current) return null;
     
+    // We move the Sunrise/Sunset cards here to make space for the SunPath
     return (
-        <div className="grid grid-cols-2 gap-4">
-            <div className="glass-card p-4">
-                <h4 className="flex items-center gap-2 text-sm opacity-80"><WiSunrise /> Sunrise</h4>
-                <p className="text-2xl font-semibold">{dayjs.unix(current.sys.sunrise).format('h:mm A')}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* The SunPath component will take up two columns on medium screens and up */}
+            <div className="md:col-span-2">
+                <SunPath sunrise={current.sys.sunrise} sunset={current.sys.sunset} />
             </div>
-            <div className="glass-card p-4">
-                <h4 className="flex items-center gap-2 text-sm opacity-80"><WiSunset /> Sunset</h4>
-                <p className="text-2xl font-semibold">{dayjs.unix(current.sys.sunset).format('h:mm A')}</p>
-            </div>
-            <div className="glass-card p-4">
+
+            <div className="glass-card p-4 flex flex-col justify-center">
                 <h4 className="flex items-center gap-2 text-sm opacity-80"><WiHumidity /> Humidity</h4>
                 <p className="text-2xl font-semibold">{current.main.humidity}<span className="text-lg">%</span></p>
             </div>
-            <div className="glass-card p-4">
+            <div className="glass-card p-4 flex flex-col justify-center">
                 <h4 className="flex items-center gap-2 text-sm opacity-80"><WiStrongWind /> Wind</h4>
                 <p className="text-2xl font-semibold">
                     {current.wind.speed.toFixed(1)}
