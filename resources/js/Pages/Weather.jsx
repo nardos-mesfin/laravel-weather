@@ -80,7 +80,7 @@ export default function Weather() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/weather?lat=${loc.lat}&lon=${loc.lon}&unit=${unit}`);
+            const res = await fetch(`/api/?lat=${loc.lat}&lon=${loc.lon}&unit=${unit}`);
             if (!res.ok) {
                 const errData = await res.json();
                 throw new Error(errData.error || `Error: ${res.status}`);
