@@ -34,6 +34,7 @@ export default function Weather() {
     const [forecast, setForecast] = useState(null);
     const [dailyForecast, setDailyForecast] = useState([]);
     const [aqiData, setAqiData] = useState(null);
+    const [uvData, setUvData] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [unit, setUnit] = useState('metric');
@@ -86,6 +87,7 @@ export default function Weather() {
             setCurrentWeather(data.current);
             setForecast(data.forecast);
             setAqiData(data.aqi);
+            setUvData(data.uv);
             updateRecentSearches({ name: data.current.name, lat: loc.lat, lon: loc.lon });
         } catch (e) {
             setError(e.message);
@@ -201,7 +203,7 @@ export default function Weather() {
                         <motion.div key="loader" exit={{ opacity: 0 }}><LoadingSkeleton /></motion.div>
                     ) : error ? (
                         <motion.div key="error" className="glass-card p-4 text-red-300">Error: {error}</motion.div>
-                    ) : currentWeather && forecast && (
+                    ) : currentWeather && forecast && uvData && (
                         <motion.div
                             key="content"
                             className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-6"
@@ -220,7 +222,7 @@ export default function Weather() {
                                 <HourlyForecast forecastList={forecast.list} sunrise={currentWeather.sys.sunrise} sunset={currentWeather.sys.sunset} />
                                 <ForecastChart forecastList={forecast.list} unit={unit} dark={dark} />
                                 <DailyForecast dailyData={dailyForecast} />
-                                <WeatherDetailsGrid current={currentWeather} unit={unit} />
+                                <WeatherDetailsGrid current={currentWeather} uvData={uvData} unit={unit} />
                             </motion.div>
                         </motion.div>
                     )}

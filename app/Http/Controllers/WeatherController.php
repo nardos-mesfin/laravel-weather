@@ -61,6 +61,10 @@ class WeatherController extends Controller
             $aqiRes = Http::get('https://api.openweathermap.org/data/2.5/air_pollution', ['lat' => $lat, 'lon' => $lon, 'appid' => $apiKey]);
             $aqiData = $aqiRes->json();
 
+            // 4. Get UV Index --- This is a free endpoint, perfect for our needs!
+            $uvRes = Http::get('https://api.openweathermap.org/data/2.5/uvi', ['lat' => $lat, 'lon' => $lon, 'appid' => $apiKey]);
+            $uvData = $uvRes->json();
+
             // The /weather endpoint conveniently includes the city name
             $currentWeatherData['name'] = $currentWeatherData['name'] ?? 'Current Location';
 
@@ -68,6 +72,7 @@ class WeatherController extends Controller
                 'current' => $currentWeatherData,
                 'forecast' => $forecastData, // This contains the 'list' of 3-hour forecasts
                 'aqi' => $aqiData['list'][0] ?? null,
+                'uv' => $uvData ?? null,
             ]);
 
         } catch (\Exception $e) {
