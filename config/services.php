@@ -36,7 +36,7 @@ return [
     ],
 
     'weather' => [
-        'key' => env('WEATHER_API_KEY'),
+        'key' => env('VITE_WEATHER_API_KEY'),
     ],
 
 ];

@@ -1,225 +1,222 @@
-import React, { useState, useEffect } from 'react';
+// resources/js/Pages/Weather.jsx
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiSun, FiMoon } from 'react-icons/fi';
+
+// Import our components
+import SearchBar from '../Components/Weather/SearchBar';
+import LoadingSkeleton from '../Components/Weather/LoadingSkeleton';
+import CurrentWeatherCard from '../Components/Weather/CurrentWeatherCard';
+import AirQualityCard from '../Components/Weather/AirQualityCard';
+import HourlyForecast from '../Components/Weather/HourlyForecast';
+import DailyForecast from '../Components/Weather/DailyForecast';
+import WeatherDetailsGrid from '../Components/Weather/WeatherDetailsGrid';
+import WeatherMap from '../Components/Weather/WeatherMap';
+import RecentSearches from '../Components/Weather/RecentSearches';
+
+const getAqiText = (aqi) => {
+    switch (aqi) {
+        case 1: return { text: 'Good', color: 'text-green-400' };
+        case 2: return { text: 'Fair', color: 'text-yellow-400' };
+        case 3: return { text: 'Moderate', color: 'text-orange-400' };
+        case 4: return { text: 'Poor', color: 'text-red-500' };
+        case 5: return { text: 'Very Poor', color: 'text-purple-500' };
+        default: return { text: 'Unknown', color: 'text-gray-400' };
+    }
+};
 
 export default function Weather() {
-    const [city, setCity] = useState('Addis Ababa');
-    const [weather, setWeather] = useState(null);
-    const [forecast, setForecast] = useState([]);
+    // --- STATE MANAGEMENT ---
+    const [location, setLocation] = useState(null);
+    const [currentWeather, setCurrentWeather] = useState(null);
+    const [forecast, setForecast] = useState(null);
+    const [dailyForecast, setDailyForecast] = useState([]);
+    const [aqiData, setAqiData] = useState(null);
     const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [unit, setUnit] = useState('metric');
     const [dark, setDark] = useState(() => localStorage.getItem('dark') === 'true');
-    const [recent, setRecent] = useState([]);
+    const [recentSearches, setRecentSearches] = useState(() => {
+        try {
+            const stored = localStorage.getItem('recentSearches');
+            return stored ? JSON.parse(stored) : [];
+        } catch { return []; }
+    });
 
-    // 🌍 Get weather by geolocation
-    const getWeatherByLocation = () => {
-        if (!navigator.geolocation) {
-            setError("Geolocation not supported.");
-            return;
-        }
+    // --- ANIMATION VARIANTS ---
+    const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+    const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } } };
 
-        setLoading(true);
-        let didRespond = false;
-
-        const geoTimeout = setTimeout(() => {
-            if (!didRespond) {
-                setError("Geolocation took too long. Try entering your city manually.");
-                setLoading(false);
-            }
-        }, 8000);
-
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                didRespond = true;
-                clearTimeout(geoTimeout);
-                const { latitude, longitude } = position.coords;
-
-                try {
-                    const res = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}&unit=${unit}`);
-                    const data = await res.json();
-
-                    if (data.error) {
-                        setError(data.error);
-                    } else {
-                        setWeather(data.weather);
-                        setForecast(data.forecast || []);
-                        setCity(data.weather.name);
-                        updateRecent(data.weather.name);
-                    }
-                } catch {
-                    setError("Failed to get weather.");
-                }
-                setLoading(false);
-            },
-            (error) => {
-                didRespond = true;
-                clearTimeout(geoTimeout);
-                console.error("Geolocation error:", error);
-                setError("Location access denied. Please check browser/OS settings.");
-                setLoading(false);
-            }
-        );
+    // --- DATA FETCHING & HELPERS ---
+    const updateRecentSearches = (newSearch) => {
+        if (!newSearch || !newSearch.name) return;
+        setRecentSearches(prevSearches => {
+            const filtered = prevSearches.filter(s => {
+                if (!s || !s.name) return false;
+                return s.name.toLowerCase() !== newSearch.name.toLowerCase();
+            });
+            const updated = [newSearch, ...filtered].slice(0, 5);
+            localStorage.setItem('recentSearches', JSON.stringify(updated));
+            return updated;
+        });
     };
 
-    // 🔍 Get weather by city name
-    const getWeather = async () => {
+    const handleDeleteSearch = (searchToDelete) => {
+        setRecentSearches(prevSearches => {
+            const updated = prevSearches.filter(s => s.lat !== searchToDelete.lat || s.lon !== searchToDelete.lon);
+            localStorage.setItem('recentSearches', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const fetchWeather = useCallback(async (loc) => {
+        if (!loc || typeof loc.lat === 'undefined' || typeof loc.lon === 'undefined') return;
         setLoading(true);
         setError(null);
-        setWeather(null);
-        setForecast([]);
-
         try {
-            const res = await fetch(`/api/weather?city=${city}&unit=${unit}`);
-            const data = await res.json();
-
-            if (data.error) {
-                setError(data.error);
-            } else {
-                setWeather(data.weather);
-                setForecast(data.forecast || []);
-                updateRecent(data.weather.name);
+            const res = await fetch(`/api/weather?lat=${loc.lat}&lon=${loc.lon}&unit=${unit}`);
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || `Error: ${res.status}`);
             }
-        } catch {
-            setError("Failed to fetch weather.");
+            const data = await res.json();
+            setCurrentWeather(data.current);
+            setForecast(data.forecast);
+            setAqiData(data.aqi);
+            updateRecentSearches({ name: data.current.name, lat: loc.lat, lon: loc.lon });
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
         }
+    }, [unit]);
+    
+    // --- USE EFFECT HOOKS ---
 
-        setLoading(false);
-    };
-
-    // 💾 Save recent searches
-    const updateRecent = (newCity) => {
-        const updated = [newCity, ...recent.filter(c => c !== newCity)].slice(0, 5);
-        setRecent(updated);
-        localStorage.setItem("recent", JSON.stringify(updated));
-    };
-
-    // 🌓 Dark mode toggle
+    // THE FIX IS HERE: We now prioritize Geolocation on initial load.
     useEffect(() => {
-        if (dark) {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
+        navigator.geolocation.getCurrentPosition(
+            // Success: User's location is the top priority.
+            ({ coords }) => {
+                setLocation({ lat: coords.latitude, lon: coords.longitude });
+            },
+            // Failure: If geolocation fails, THEN we check for fallbacks.
+            () => {
+                const storedSearches = localStorage.getItem('recentSearches');
+                const recent = storedSearches ? JSON.parse(storedSearches) : [];
+                if (recent.length > 0 && recent[0].lat && recent[0].lon) {
+                    // Fallback 1: Use the most recent search.
+                    setLocation(recent[0]);
+                } else {
+                    // Fallback 2: Use the hardcoded default.
+                    setLocation({ lat: 9.005401, lon: 38.763611 });
+                }
+            }
+        );
+    }, []); // Empty array ensures this logic runs ONLY ONCE when the component mounts.
+
+    useEffect(() => {
+        if (location) fetchWeather(location);
+    }, [location, unit, fetchWeather]);
+
+    useEffect(() => {
+        if (forecast && forecast.list) {
+            const dailyData = forecast.list.reduce((acc, reading) => {
+                const date = reading.dt_txt.split(' ')[0];
+                if (!acc[date]) { acc[date] = { date: date, minTemp: reading.main.temp, maxTemp: reading.main.temp, icons: {} }; }
+                acc[date].minTemp = Math.min(acc[date].minTemp, reading.main.temp);
+                acc[date].maxTemp = Math.max(acc[date].maxTemp, reading.main.temp);
+                const icon = reading.weather[0].id;
+                acc[date].icons[icon] = (acc[date].icons[icon] || 0) + 1;
+                return acc;
+            }, {});
+            const processedDaily = Object.values(dailyData).map(day => {
+                const mostFrequentIcon = Object.keys(day.icons).reduce((a, b) => day.icons[a] > day.icons[b] ? a : b);
+                return {...day, icon: mostFrequentIcon };
+            }).slice(0, 5);
+            setDailyForecast(processedDaily);
         }
+    }, [forecast]);
+
+    useEffect(() => {
+        document.documentElement.classList.toggle("dark", dark);
         localStorage.setItem("dark", dark);
     }, [dark]);
 
-    // 🔁 Load recent & auto-fetch
-    useEffect(() => {
-        const saved = JSON.parse(localStorage.getItem("recent")) || [];
-        setRecent(saved);
-        getWeatherByLocation();
+    const handleSearchChange = (searchData) => {
+        if (searchData) setLocation({ ...searchData.value });
+    };
 
-        const fallback = setTimeout(() => {
-            if (!weather && !error) {
-                getWeather();
-            }
-        }, 10000);
+    const getBackgroundClass = () => {
+        if (!currentWeather) return 'bg-gray-400';
+        const code = currentWeather.weather[0].id;
+        const isDay = currentWeather.dt > currentWeather.sys.sunrise && currentWeather.dt < currentWeather.sys.sunset;
+        if (code < 300) return 'bg-storm-day'; if (code < 600) return 'bg-rainy-day'; if (code < 700) return 'bg-snowy-day';
+        if (code < 800) return 'bg-atmosphere'; if (code === 800) return isDay ? 'bg-clear-day' : 'bg-clear-night';
+        if (code > 800) return isDay ? 'bg-cloudy-day' : 'bg-cloudy-night'; return 'bg-clear-day';
+    };
 
-        return () => clearTimeout(fallback);
-    }, [unit]);
+    const isDay = currentWeather ? currentWeather.dt > currentWeather.sys.sunrise && currentWeather.dt < currentWeather.sys.sunset : true;
 
-    const toggleUnit = () => setUnit(prev => prev === 'metric' ? 'imperial' : 'metric');
-    const toggleDark = () => setDark(prev => !prev);
-
-    const iconUrl = weather?.weather?.[0]?.icon
-        ? `https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`
-        : null;
-
+    // --- RENDER ---
     return (
-        <div className="p-6 min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
-            <div className="flex justify-between items-center max-w-xl mx-auto mb-6">
-                <h1 className="text-2xl font-bold">🌤️ Weather App</h1>
-                <button onClick={toggleDark} className="bg-black text-white dark:bg-yellow-400 dark:text-black px-3 py-1 rounded">
-                    {dark ? "☀️ Light Mode" : "🌙 Dark Mode"}
-                </button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-2 mb-4">
-                <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    className="border p-2 rounded w-full sm:w-2/3 dark:bg-gray-800 dark:text-white"
-                />
-                <button
-                    onClick={getWeather}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                >
-                    Search
-                </button>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-2 mb-4">
-                <button
-                    onClick={toggleUnit}
-                    className="bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded hover:bg-gray-300"
-                >
-                    Switch to {unit === 'metric' ? '°F' : '°C'}
-                </button>
-                <button
-                    onClick={getWeatherByLocation}
-                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
-                >
-                    Use My Location
-                </button>
-            </div>
-
-            {recent.length > 0 && (
-                <>
-                    <div className="text-sm font-medium mb-2">Recent Searches:</div>
-                    <div className="flex flex-wrap gap-2 justify-center mb-4">
-                        {recent.map((item, i) => (
-                            <button
-                                key={i}
-                                onClick={() => { setCity(item); getWeather(); }}
-                                className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
-                            >
-                                {item}
-                            </button>
-                        ))}
+        <>
+            <div className={`main-bg ${getBackgroundClass()}`} />
+            <main className="p-4 sm:p-6 lg:p-8 text-white font-sans min-h-screen flex flex-col items-center relative z-10">
+                <header className="w-full max-w-6xl flex justify-between items-center mb-4">
+                    <h1 className="text-xl font-bold text-shadow">Weatherly</h1>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setUnit(u => u === 'metric' ? 'imperial' : 'metric')} className="text-lg font-semibold hover:scale-110 transition-transform">
+                            °{unit === 'metric' ? 'C' : 'F'}
+                        </button>
+                        <button onClick={() => setDark(d => !d)} className="text-2xl hover:scale-110 transition-transform">
+                            {dark ? <FiSun /> : <FiMoon />}
+                        </button>
                     </div>
-                </>
-            )}
+                </header>
 
-            {loading && <p className="text-gray-500">Loading...</p>}
-            {error && <p className="text-red-500">{error}</p>}
-
-            {weather && (
-                <div className="mt-6 bg-white dark:bg-gray-800 shadow p-4 rounded text-left max-w-full sm:max-w-md mx-auto">
-                    <div className="text-center mb-4">
-                        {iconUrl && <img src={iconUrl} alt="Icon" className="w-20 h-20 mx-auto" />}
-                        <p className="text-lg font-bold">{weather.name}</p>
-                    </div>
-                    <p><strong>Temperature:</strong> {weather.main.temp} {unit === 'metric' ? '°C' : '°F'}</p>
-                    <p><strong>Condition:</strong> {weather.weather[0].description}</p>
-                    <p><strong>Humidity:</strong> {weather.main.humidity}%</p>
-                    <p><strong>Wind:</strong> {weather.wind.speed} {unit === 'metric' ? 'm/s' : 'mph'}</p>
-
-                    <iframe
-                        className="w-full h-48 mt-4 rounded"
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${weather.coord.lon - 0.02}%2C${weather.coord.lat - 0.02}%2C${weather.coord.lon + 0.02}%2C${weather.coord.lat + 0.02}&layer=mapnik&marker=${weather.coord.lat}%2C${weather.coord.lon}`}
-                        title="Map"
-                    ></iframe>
+                <div className="w-full max-w-md z-10 mb-4">
+                   <SearchBar onSearchChange={handleSearchChange} />
                 </div>
-            )}
-
-            {forecast.length > 0 && (
-                <div className="mt-6 bg-gray-100 dark:bg-gray-800 p-4 rounded max-w-full sm:max-w-xl mx-auto">
-                    <h2 className="text-lg font-bold mb-2 text-center">📅 Forecast (Next 24h)</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        {forecast.map((f, i) => (
-                            <div key={i} className="p-2 bg-white dark:bg-gray-700 rounded shadow text-center">
-                                <p className="text-sm">{f.dt_txt.slice(11, 16)}</p>
-                                <img
-                                    src={`https://openweathermap.org/img/wn/${f.weather[0].icon}@2x.png`}
-                                    alt="icon"
-                                    className="w-12 h-12 mx-auto"
-                                />
-                                <p>{f.main.temp}°{unit === 'metric' ? 'C' : 'F'}</p>
-                            </div>
-                        ))}
-                    </div>
+                
+                <div className="w-full max-w-md z-10 mb-8">
+                    <RecentSearches 
+                        searches={recentSearches} 
+                        onSearch={setLocation} 
+                        onDelete={handleDeleteSearch} 
+                    />
                 </div>
-            )}
-        </div>
+
+                <AnimatePresence mode="wait">
+                    {loading ? (
+                        <motion.div key="loader" exit={{ opacity: 0 }}><LoadingSkeleton /></motion.div>
+                    ) : error ? (
+                        <motion.div key="error" className="glass-card p-4 text-red-300">Error: {error}</motion.div>
+                    ) : currentWeather && forecast && (
+                        <motion.div
+                            key="content"
+                            className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-6"
+                            variants={containerVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit={{ opacity: 0 }}
+                        >
+                            <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
+                                <CurrentWeatherCard location={location} current={currentWeather} isDay={isDay} />
+                                <AirQualityCard aqiData={aqiData} getAqiText={getAqiText} />
+                                <WeatherMap location={currentWeather.coord} dark={dark} />
+                            </motion.div>
+
+                            <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
+                                <HourlyForecast forecastList={forecast.list} sunrise={currentWeather.sys.sunrise} sunset={currentWeather.sys.sunset} />
+                                <DailyForecast dailyData={dailyForecast} />
+                                <WeatherDetailsGrid current={currentWeather} unit={unit} />
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
+        </>
     );
 }
