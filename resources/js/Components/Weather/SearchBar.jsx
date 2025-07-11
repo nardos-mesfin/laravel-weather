@@ -4,7 +4,7 @@ import React from 'react';
 import { AsyncPaginate } from 'react-select-async-paginate';
 import { motion } from 'framer-motion';
 
-const SearchBar = ({ onSearchChange }) => {
+const SearchBar = ({ onSearchChange, onFocus, onBlur }) => {
 
     const loadOptions = async (inputValue) => {
         try {
@@ -50,14 +50,17 @@ const SearchBar = ({ onSearchChange }) => {
 
     return (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <AsyncPaginate
-                placeholder="Search for a city..."
-                debounceTimeout={600}
-                loadOptions={loadOptions}
-                onChange={onSearchChange}
-                styles={customStyles}
-            />
-        </motion.div>
+        <AsyncPaginate
+            placeholder="Search for a city..."
+            debounceTimeout={600}
+            loadOptions={loadOptions}
+            onChange={onSearchChange}
+            styles={customStyles}
+            // Pass the focus/blur event handlers to the component
+            onFocus={onFocus}
+            onBlur={onBlur}
+        />
+    </motion.div>
     );
 };
 

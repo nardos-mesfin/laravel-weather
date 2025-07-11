@@ -43,6 +43,9 @@ export default function Weather() {
             return stored ? JSON.parse(stored) : [];
         } catch { return []; }
     });
+    // --- NEW: State to track if the search bar is focused ---
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+
 
     // --- ANIMATION VARIANTS ---
     const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
@@ -93,28 +96,22 @@ export default function Weather() {
     }, [unit]);
     
     // --- USE EFFECT HOOKS ---
-
-    // THE FIX IS HERE: We now prioritize Geolocation on initial load.
     useEffect(() => {
         navigator.geolocation.getCurrentPosition(
-            // Success: User's location is the top priority.
             ({ coords }) => {
                 setLocation({ lat: coords.latitude, lon: coords.longitude });
             },
-            // Failure: If geolocation fails, THEN we check for fallbacks.
             () => {
                 const storedSearches = localStorage.getItem('recentSearches');
                 const recent = storedSearches ? JSON.parse(storedSearches) : [];
                 if (recent.length > 0 && recent[0].lat && recent[0].lon) {
-                    // Fallback 1: Use the most recent search.
                     setLocation(recent[0]);
                 } else {
-                    // Fallback 2: Use the hardcoded default.
                     setLocation({ lat: 9.005401, lon: 38.763611 });
                 }
             }
         );
-    }, []); // Empty array ensures this logic runs ONLY ONCE when the component mounts.
+    }, []);
 
     useEffect(() => {
         if (location) fetchWeather(location);
@@ -145,7 +142,10 @@ export default function Weather() {
     }, [dark]);
 
     const handleSearchChange = (searchData) => {
-        if (searchData) setLocation({ ...searchData.value });
+        if (searchData) {
+            setLocation({ ...searchData.value });
+            setIsSearchFocused(false); // When a city is selected, blur the search
+        }
     };
 
     const getBackgroundClass = () => {
@@ -163,8 +163,8 @@ export default function Weather() {
     return (
         <>
             <div className={`main-bg ${getBackgroundClass()}`} />
-            <main className="p-4 sm:p-6 lg:p-8 text-white font-sans min-h-screen flex flex-col items-center relative z-10">
-                <header className="w-full max-w-6xl flex justify-between items-center mb-4">
+            <main className="p-4 sm:p-6 lg:p-8 text-white font-sans min-h-screen flex flex-col items-center relative">
+                <header className="w-full max-w-6xl flex justify-between items-center mb-4 z-10">
                     <h1 className="text-xl font-bold text-shadow">Weatherly</h1>
                     <div className="flex items-center gap-4">
                         <button onClick={() => setUnit(u => u === 'metric' ? 'imperial' : 'metric')} className="text-lg font-semibold hover:scale-110 transition-transform">
@@ -176,16 +176,25 @@ export default function Weather() {
                     </div>
                 </header>
 
-                <div className="w-full max-w-md z-10 mb-4">
-                   <SearchBar onSearchChange={handleSearchChange} />
+                <div className="w-full max-w-md z-20 mb-4">
+                   <SearchBar 
+                        onSearchChange={handleSearchChange}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onBlur={() => setIsSearchFocused(false)}
+                   />
                 </div>
                 
                 <div className="w-full max-w-md z-10 mb-8">
-                    <RecentSearches 
-                        searches={recentSearches} 
-                        onSearch={setLocation} 
-                        onDelete={handleDeleteSearch} 
-                    />
+                    <AnimatePresence>
+                        {/* --- THE FIX IS HERE: Only show RecentSearches if the bar is NOT focused --- */}
+                        {!isSearchFocused && (
+                             <RecentSearches 
+                                searches={recentSearches} 
+                                onSearch={setLocation} 
+                                onDelete={handleDeleteSearch} 
+                            />
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 <AnimatePresence mode="wait">
