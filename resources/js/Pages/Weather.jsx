@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiSun, FiMoon } from 'react-icons/fi';
+import { Head } from '@inertiajs/react'; // <-- 1. IMPORT THE HEAD COMPONENT
 
 // Import our components
 import SearchBar from '../Components/Weather/SearchBar';
@@ -99,38 +100,32 @@ export default function Weather() {
     }, [unit, updateRecentSearches]); 
     
     // --- USE EFFECT HOOKS ---
-
-    // THE FIX IS HERE: A SINGLE, CONSOLIDATED STARTUP EFFECT
     useEffect(() => {
-        // This function determines the initial location to fetch.
         const getInitialLocation = new Promise((resolve) => {
              navigator.geolocation.getCurrentPosition(
                 ({ coords }) => resolve({ lat: coords.latitude, lon: coords.longitude }),
-                () => { // Geolocation failed or was denied
+                () => {
                     const storedSearches = localStorage.getItem('recentSearches');
                     const recent = storedSearches ? JSON.parse(storedSearches) : [];
                     if (recent.length > 0 && recent[0].lat && recent[0].lon) {
                         resolve(recent[0]);
                     } else {
-                        resolve({ lat: 9.005401, lon: 38.763611 }); // Default
+                        resolve({ lat: 9.005401, lon: 38.763611 });
                     }
                 }
             );
         });
         
-        // This runs after the intro is done.
         const timer = setTimeout(async () => {
             const initialLocation = await getInitialLocation;
-            setLocation(initialLocation); // Set the location state
-            setIsIntroVisible(false); // Hide the intro
-        }, 2200); // 2.2 seconds for a smoother feel
+            setLocation(initialLocation);
+            setIsIntroVisible(false);
+        }, 2200);
 
         return () => clearTimeout(timer);
-    }, []); // Runs only once on mount
+    }, []);
 
-    // This effect now only handles subsequent data fetches.
     useEffect(() => {
-        // The `isIntroVisible` check prevents this from running on the initial load.
         if (location && !isIntroVisible) {
             fetchWeather(location);
         }
@@ -180,6 +175,9 @@ export default function Weather() {
     // --- RENDER ---
     return (
         <>
+            {/* 2. USE THE HEAD COMPONENT WITH A DYNAMIC TITLE */}
+            <Head title={currentWeather ? currentWeather.name : 'Loading...'} />
+
             <AnimatePresence>
                 {isIntroVisible ? (
                     <Intro key="intro" />
