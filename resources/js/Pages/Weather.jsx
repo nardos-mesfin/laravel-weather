@@ -125,6 +125,17 @@ export default function Weather() {
         return () => clearTimeout(timer);
     }, []);
 
+    // Effect to handle the intro screen
+    useEffect(() => {
+        // Let the "Weather Weaver" animation play for 6 seconds
+        const timer = setTimeout(() => {
+            setIsIntroVisible(false);
+        }, 6000); // 6000 milliseconds = 6 seconds
+    
+        return () => clearTimeout(timer);
+    }, []); // Empty dependency array ensures this runs only once
+
+
     useEffect(() => {
         if (location && !isIntroVisible) {
             fetchWeather(location);
