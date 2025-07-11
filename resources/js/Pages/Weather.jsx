@@ -15,6 +15,7 @@ import WeatherDetailsGrid from '../Components/Weather/WeatherDetailsGrid';
 import WeatherMap from '../Components/Weather/WeatherMap';
 import RecentSearches from '../Components/Weather/RecentSearches';
 import ForecastChart from '../Components/Weather/ForecastChart';
+import Intro from '../Components/Intro';
 
 const getAqiText = (aqi) => {
     switch (aqi) {
@@ -46,6 +47,7 @@ export default function Weather() {
         } catch { return []; }
     });
     const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const [isIntroVisible, setIsIntroVisible] = useState(true); 
 
     // --- ANIMATION VARIANTS ---
     const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
@@ -63,7 +65,7 @@ export default function Weather() {
             localStorage.setItem('recentSearches', JSON.stringify(updated));
             return updated;
         });
-    }, []); // This function has no external dependencies, so the empty array is correct.
+    }, []);
 
     const handleDeleteSearch = (searchToDelete) => {
         setRecentSearches(prevSearches => {
@@ -94,30 +96,45 @@ export default function Weather() {
         } finally {
             setLoading(false);
         }
-    // THE FIX IS HERE: We add `updateRecentSearches` to the dependency array.
     }, [unit, updateRecentSearches]); 
     
     // --- USE EFFECT HOOKS ---
-    useEffect(() => {
-        navigator.geolocation.getCurrentPosition(
-            ({ coords }) => {
-                setLocation({ lat: coords.latitude, lon: coords.longitude });
-            },
-            () => {
-                const storedSearches = localStorage.getItem('recentSearches');
-                const recent = storedSearches ? JSON.parse(storedSearches) : [];
-                if (recent.length > 0 && recent[0].lat && recent[0].lon) {
-                    setLocation(recent[0]);
-                } else {
-                    setLocation({ lat: 9.005401, lon: 38.763611 });
-                }
-            }
-        );
-    }, []);
 
+    // THE FIX IS HERE: A SINGLE, CONSOLIDATED STARTUP EFFECT
     useEffect(() => {
-        if (location) fetchWeather(location);
-    }, [location, unit, fetchWeather]);
+        // This function determines the initial location to fetch.
+        const getInitialLocation = new Promise((resolve) => {
+             navigator.geolocation.getCurrentPosition(
+                ({ coords }) => resolve({ lat: coords.latitude, lon: coords.longitude }),
+                () => { // Geolocation failed or was denied
+                    const storedSearches = localStorage.getItem('recentSearches');
+                    const recent = storedSearches ? JSON.parse(storedSearches) : [];
+                    if (recent.length > 0 && recent[0].lat && recent[0].lon) {
+                        resolve(recent[0]);
+                    } else {
+                        resolve({ lat: 9.005401, lon: 38.763611 }); // Default
+                    }
+                }
+            );
+        });
+        
+        // This runs after the intro is done.
+        const timer = setTimeout(async () => {
+            const initialLocation = await getInitialLocation;
+            setLocation(initialLocation); // Set the location state
+            setIsIntroVisible(false); // Hide the intro
+        }, 2200); // 2.2 seconds for a smoother feel
+
+        return () => clearTimeout(timer);
+    }, []); // Runs only once on mount
+
+    // This effect now only handles subsequent data fetches.
+    useEffect(() => {
+        // The `isIntroVisible` check prevents this from running on the initial load.
+        if (location && !isIntroVisible) {
+            fetchWeather(location);
+        }
+    }, [location, unit, fetchWeather, isIntroVisible]);
 
     useEffect(() => {
         if (forecast && forecast.list) {
@@ -140,7 +157,6 @@ export default function Weather() {
 
     useEffect(() => {
         document.documentElement.classList.toggle("dark", dark);
-        localStorage.setItem("dark", dark);
     }, [dark]);
 
     const handleSearchChange = (searchData) => {
@@ -164,70 +180,78 @@ export default function Weather() {
     // --- RENDER ---
     return (
         <>
-            <div className={`main-bg ${getBackgroundClass()}`} />
-            <main className="p-4 sm:p-6 lg:p-8 text-white font-sans min-h-screen flex flex-col items-center relative">
-                <header className="w-full max-w-6xl flex justify-between items-center mb-4 z-10">
-                    <h1 className="text-xl font-bold text-shadow">Weatherly</h1>
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => setUnit(u => u === 'metric' ? 'imperial' : 'metric')} className="text-lg font-semibold hover:scale-110 transition-transform">
-                            °{unit === 'metric' ? 'C' : 'F'}
-                        </button>
-                        <button onClick={() => setDark(d => !d)} className="text-2xl hover:scale-110 transition-transform">
-                            {dark ? <FiSun /> : <FiMoon />}
-                        </button>
-                    </div>
-                </header>
+            <AnimatePresence>
+                {isIntroVisible ? (
+                    <Intro key="intro" />
+                ) : (
+                    <motion.div key="main-app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+                        <div className={`main-bg ${getBackgroundClass()}`} />
+                        <main className="p-4 sm:p-6 lg:p-8 text-white font-sans min-h-screen flex flex-col items-center relative">
+                            <header className="w-full max-w-6xl flex justify-between items-center mb-4 z-10">
+                                <h1 className="text-xl font-bold text-shadow">Weatherly</h1>
+                                <div className="flex items-center gap-4">
+                                    <button onClick={() => setUnit(u => u === 'metric' ? 'imperial' : 'metric')} className="text-lg font-semibold hover:scale-110 transition-transform">
+                                        °{unit === 'metric' ? 'C' : 'F'}
+                                    </button>
+                                    <button onClick={() => setDark(d => !d)} className="text-2xl hover:scale-110 transition-transform">
+                                        {dark ? <FiSun /> : <FiMoon />}
+                                    </button>
+                                </div>
+                            </header>
 
-                <div className="w-full max-w-md z-20 mb-4">
-                   <SearchBar 
-                        onSearchChange={handleSearchChange}
-                        onFocus={() => setIsSearchFocused(true)}
-                        onBlur={() => setIsSearchFocused(false)}
-                   />
-                </div>
-                
-                <div className="w-full max-w-md z-10 mb-8">
-                    <AnimatePresence>
-                        {!isSearchFocused && (
-                             <RecentSearches 
-                                searches={recentSearches} 
-                                onSearch={setLocation} 
-                                onDelete={handleDeleteSearch} 
-                            />
-                        )}
-                    </AnimatePresence>
-                </div>
+                            <div className="w-full max-w-md z-20 mb-4">
+                               <SearchBar 
+                                    onSearchChange={handleSearchChange}
+                                    onFocus={() => setIsSearchFocused(true)}
+                                    onBlur={() => setIsSearchFocused(false)}
+                               />
+                            </div>
+                            
+                            <div className="w-full max-w-md z-10 mb-8">
+                                <AnimatePresence>
+                                    {!isSearchFocused && (
+                                         <RecentSearches 
+                                            searches={recentSearches} 
+                                            onSearch={setLocation} 
+                                            onDelete={handleDeleteSearch} 
+                                        />
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                <AnimatePresence mode="wait">
-                    {loading ? (
-                        <motion.div key="loader" exit={{ opacity: 0 }}><LoadingSkeleton /></motion.div>
-                    ) : error ? (
-                        <motion.div key="error" className="glass-card p-4 text-red-300">Error: {error}</motion.div>
-                    ) : currentWeather && forecast && uvData && (
-                        <motion.div
-                            key="content"
-                            className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-6"
-                            variants={containerVariants}
-                            initial="hidden"
-                            animate="visible"
-                            exit={{ opacity: 0 }}
-                        >
-                            <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
-                                <CurrentWeatherCard location={location} current={currentWeather} isDay={isDay} />
-                                <AirQualityCard aqiData={aqiData} getAqiText={getAqiText} />
-                                <WeatherMap location={currentWeather.coord} dark={dark} />
-                            </motion.div>
+                            <AnimatePresence mode="wait">
+                                {loading ? (
+                                    <motion.div key="loader" exit={{ opacity: 0 }}><LoadingSkeleton /></motion.div>
+                                ) : error ? (
+                                    <motion.div key="error" className="glass-card p-4 text-red-300">Error: {error}</motion.div>
+                                ) : currentWeather && forecast && uvData && (
+                                    <motion.div
+                                        key="content"
+                                        className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-6"
+                                        variants={containerVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        exit={{ opacity: 0 }}
+                                    >
+                                        <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
+                                            <CurrentWeatherCard location={location} current={currentWeather} isDay={isDay} />
+                                            <AirQualityCard aqiData={aqiData} getAqiText={getAqiText} />
+                                            <WeatherMap location={currentWeather.coord} dark={dark} />
+                                        </motion.div>
 
-                            <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
-                                <HourlyForecast forecastList={forecast.list} sunrise={currentWeather.sys.sunrise} sunset={currentWeather.sys.sunset} />
-                                <ForecastChart forecastList={forecast.list} unit={unit} dark={dark} />
-                                <DailyForecast dailyData={dailyForecast} />
-                                <WeatherDetailsGrid current={currentWeather} uvData={uvData} unit={unit} />
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </main>
+                                        <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
+                                            <HourlyForecast forecastList={forecast.list} sunrise={currentWeather.sys.sunrise} sunset={currentWeather.sys.sunset} />
+                                            <ForecastChart forecastList={forecast.list} unit={unit} dark={dark} />
+                                            <DailyForecast dailyData={dailyForecast} />
+                                            <WeatherDetailsGrid current={currentWeather} uvData={uvData} unit={unit} />
+                                        </motion.div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </main>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </>
     );
 }
