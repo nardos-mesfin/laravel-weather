@@ -14,6 +14,7 @@ import DailyForecast from '../Components/Weather/DailyForecast';
 import WeatherDetailsGrid from '../Components/Weather/WeatherDetailsGrid';
 import WeatherMap from '../Components/Weather/WeatherMap';
 import RecentSearches from '../Components/Weather/RecentSearches';
+import ForecastChart from '../Components/Weather/ForecastChart';
 
 const getAqiText = (aqi) => {
     switch (aqi) {
@@ -43,16 +44,14 @@ export default function Weather() {
             return stored ? JSON.parse(stored) : [];
         } catch { return []; }
     });
-    // --- NEW: State to track if the search bar is focused ---
     const [isSearchFocused, setIsSearchFocused] = useState(false);
-
 
     // --- ANIMATION VARIANTS ---
     const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
     const itemVariants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } } };
 
     // --- DATA FETCHING & HELPERS ---
-    const updateRecentSearches = (newSearch) => {
+    const updateRecentSearches = useCallback((newSearch) => {
         if (!newSearch || !newSearch.name) return;
         setRecentSearches(prevSearches => {
             const filtered = prevSearches.filter(s => {
@@ -63,7 +62,7 @@ export default function Weather() {
             localStorage.setItem('recentSearches', JSON.stringify(updated));
             return updated;
         });
-    };
+    }, []); // This function has no external dependencies, so the empty array is correct.
 
     const handleDeleteSearch = (searchToDelete) => {
         setRecentSearches(prevSearches => {
@@ -93,7 +92,8 @@ export default function Weather() {
         } finally {
             setLoading(false);
         }
-    }, [unit]);
+    // THE FIX IS HERE: We add `updateRecentSearches` to the dependency array.
+    }, [unit, updateRecentSearches]); 
     
     // --- USE EFFECT HOOKS ---
     useEffect(() => {
@@ -144,7 +144,7 @@ export default function Weather() {
     const handleSearchChange = (searchData) => {
         if (searchData) {
             setLocation({ ...searchData.value });
-            setIsSearchFocused(false); // When a city is selected, blur the search
+            setIsSearchFocused(false);
         }
     };
 
@@ -186,7 +186,6 @@ export default function Weather() {
                 
                 <div className="w-full max-w-md z-10 mb-8">
                     <AnimatePresence>
-                        {/* --- THE FIX IS HERE: Only show RecentSearches if the bar is NOT focused --- */}
                         {!isSearchFocused && (
                              <RecentSearches 
                                 searches={recentSearches} 
@@ -219,6 +218,7 @@ export default function Weather() {
 
                             <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
                                 <HourlyForecast forecastList={forecast.list} sunrise={currentWeather.sys.sunrise} sunset={currentWeather.sys.sunset} />
+                                <ForecastChart forecastList={forecast.list} unit={unit} dark={dark} />
                                 <DailyForecast dailyData={dailyForecast} />
                                 <WeatherDetailsGrid current={currentWeather} unit={unit} />
                             </motion.div>
